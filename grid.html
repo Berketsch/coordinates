@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Coordinate Grid for Kids</title>
+  <style>
+    body {
+      font-family: 'Comic Sans MS', cursive, sans-serif;
+      background: #f0f8ff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin-top: 40px;
+    }
+    h1 {
+      color: #2d7dd2;
+      margin-bottom: 20px;
+    }
+    #grid {
+      position: relative;
+      background: #fff;
+      border: 6px solid #2d7dd2;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+      margin-bottom: 20px;
+      cursor: crosshair;
+    }
+    .locked-point {
+      position: absolute;
+      width: 36px;
+      height: 36px;
+      background: #ffb703;
+      border-radius: 50%;
+      border: 2px solid #fb8500;
+      box-shadow: 0 0 8px #ffb70388;
+      pointer-events: none;
+      transform: translate(-18px, -18px);
+      z-index: 2;
+    }
+    #coords-display {
+      font-size: 1.5em;
+      color: #219ebc;
+      background: #e0f7fa;
+      padding: 10px 24px;
+      border-radius: 12px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+    }
+    .grid-line {
+      position: absolute;
+      background: #bde0fe;
+      z-index: 1;
+    }
+  </style>
+</head>
+<body>
+  <h1>Coordinate Grid</h1>
+  <div id="game-ui" style="display: flex; align-items: center; gap: 24px; margin-bottom: 16px;">
+    <span id="target-coord" style="font-size: 1.3em; color: #fb8500; font-weight: bold;"></span>
+    <span id="score" style="font-size: 1.2em; color: #219ebc;">Score: 0</span>
+    <span id="lives" style="font-size: 1.5em; color: #e63946;"></span>
+  </div>
+  <div id="grid"></div>
+  <div id="bottom-message" style="margin-top: 18px; font-size: 1.2em; color: #1976d2; text-align: center;"></div>
+  <script>
+    // Message area logic
+    const bottomMessage = document.getElementById('bottom-message');
+    function setMessage(msg) {
+      bottomMessage.textContent = msg;
+    }
+
+  const GRID_RADIUS = 12; // covers -12 to +12
+  const GRID_SIZE = GRID_RADIUS * 2 + 1;
+  const CELL_SIZE = 36;
+  const DOT_SIZE = 16;
+    const grid = document.getElementById('grid');
+    grid.style.width = (GRID_SIZE * CELL_SIZE) + 'px';
+    grid.style.height = (GRID_SIZE * CELL_SIZE) + 'px';
+
+    // Draw grid lines
+    for (let i = 0; i <= GRID_SIZE; i++) {
+      const hLine = document.createElement('div');
+      hLine.className = 'grid-line';
+      hLine.style.top = (i * CELL_SIZE) + 'px';
+      hLine.style.left = '0px';
+      hLine.style.width = (GRID_SIZE * CELL_SIZE) + 'px';
+      hLine.style.height = '2px';
+      // Make the x-axis thicker and blue
+      if (i === GRID_RADIUS) {
+        hLine.style.background = '#1976d2';
+        hLine.style.height = '5px';
+        hLine.style.zIndex = 3;
+      }
+      grid.appendChild(hLine);
+
+      const vLine = document.createElement('div');
+      vLine.className = 'grid-line';
+      vLine.style.left = (i * CELL_SIZE) + 'px';
+      vLine.style.top = '0px';
+      vLine.style.height = (GRID_SIZE * CELL_SIZE) + 'px';
+      vLine.style.width = '2px';
+      // Make the y-axis thicker and blue
+      if (i === GRID_RADIUS) {
+        vLine.style.background = '#1976d2';
+        vLine.style.width = '5px';
+        vLine.style.zIndex = 3;
+      }
+      grid.appendChild(vLine);
+    }
+
+    // Prepare intersection points (where grid lines cross)
+    const intersections = [];
+    for (let x = -GRID_RADIUS; x <= GRID_RADIUS; x++) {
+      for (let y = -GRID_RADIUS; y <= GRID_RADIUS; y++) {
+        intersections.push({
+          x,
+          y,
+          left: (x + GRID_RADIUS) * CELL_SIZE,
+          top: (GRID_RADIUS - y) * CELL_SIZE
+        });
+      }
+    }
+
+    // Adjust click detection for edge intersections
+  // No clamping needed for mouse position
+
+    // Game state
+    let score = 0;
+    let lives = 3;
+    let target = null;
+    function updateScore() {
+      document.getElementById('score').textContent = `Score: ${score}`;
+      setMessage('Put your cursor over the grid and click the correct coordinate!');
+    }
+    function updateLives() {
+      document.getElementById('lives').innerHTML = '❤'.repeat(lives) + '♡'.repeat(3-lives);
+    }
+    function randomTarget() {
+      const idx = Math.floor(Math.random() * intersections.length);
+      target = intersections[idx];
+      document.getElementById('target-coord').textContent = `Click: (${target.x}, ${target.y})`;
+    }
+    function resetGame() {
+      score = 0;
+      lives = 3;
+      updateScore();
+      updateLives();
+      randomTarget();
+      setMessage('Game restarted! Put your cursor over the grid and click the correct coordinate!');
+    }
+
+    // UI setup
+    updateScore();
+    updateLives();
+    randomTarget();
+
+    let lockedPoint = null;
+    grid.addEventListener('mousemove', function(e) {
+      const rect = grid.getBoundingClientRect();
+      let mouseX = e.clientX - rect.left;
+      let mouseY = e.clientY - rect.top;
+      // Find the closest intersection
+      let minDist = Infinity;
+      let closest = null;
+      for (const pt of intersections) {
+        const dx = mouseX - pt.left;
+        const dy = mouseY - pt.top;
+        const dist = dx*dx + dy*dy;
+        if (dist < minDist) {
+          minDist = dist;
+          closest = pt;
+        }
+      }
+      if (!lockedPoint) {
+        lockedPoint = document.createElement('div');
+        lockedPoint.className = 'locked-point';
+        grid.appendChild(lockedPoint);
+      }
+      lockedPoint.style.left = (closest.left) + 'px';
+      lockedPoint.style.top = (closest.top) + 'px';
+      // No coordinate display
+    });
+    grid.addEventListener('mouseleave', function() {
+      if (lockedPoint) {
+        grid.removeChild(lockedPoint);
+        lockedPoint = null;
+      }
+      // No coordinate display
+    });
+
+    grid.addEventListener('click', function(e) {
+      if (lives === 0) {
+        resetGame();
+        return;
+      }
+      const rect = grid.getBoundingClientRect();
+      let mouseX = e.clientX - rect.left;
+      let mouseY = e.clientY - rect.top;
+      // Find the closest intersection
+      let minDist = Infinity;
+      let closest = null;
+      for (const pt of intersections) {
+        const dx = mouseX - pt.left;
+        const dy = mouseY - pt.top;
+        const dist = dx*dx + dy*dy;
+        if (dist < minDist) {
+          minDist = dist;
+          closest = pt;
+        }
+      }
+      // Allow a tolerance for edge clicks
+      const tolerance = 18; // px
+      if (Math.sqrt(minDist) <= tolerance && closest.x === target.x && closest.y === target.y) {
+        score++;
+        updateScore();
+        randomTarget();
+        setMessage('Correct! Keep going!');
+      } else {
+        lives--;
+        updateLives();
+        if (lives === 0) {
+          document.getElementById('target-coord').textContent = 'Game Over! Click grid to restart.';
+          setMessage('Game Over! Click the grid to play again.');
+        } else {
+          setMessage('Wrong spot! Try again.');
+        }
+      }
+    });
+  </script>
+</body>
+</html>
